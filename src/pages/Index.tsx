@@ -1,13 +1,35 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "@/components/ui/icon";
 
 const TABS = [
   { id: "chats", label: "Чаты", icon: "MessageCircle" },
   { id: "contacts", label: "Контакты", icon: "Users" },
   { id: "groups", label: "Группы", icon: "UsersRound" },
+  { id: "network", label: "P2P Сеть", icon: "Network" },
   { id: "notifications", label: "Уведомления", icon: "Bell" },
   { id: "profile", label: "Профиль", icon: "UserCircle" },
   { id: "settings", label: "Настройки", icon: "Settings" },
+];
+
+const MY_NODE_ID = "0x7f3a...c91e";
+const MY_PUBKEY = "ed25519:3xQ7...Kp9R";
+
+const P2P_NODES = [
+  { id: "0x1a2b...f3d4", country: "🇩🇪", city: "Франкфурт", latency: 18, relay: false, active: true },
+  { id: "0x5c6d...a7e8", country: "🇫🇮", city: "Хельсинки", latency: 34, relay: false, active: true },
+  { id: "0x9e0f...b1c2", country: "🇳🇱", city: "Амстердам", latency: 52, relay: true, active: true },
+  { id: "0x3d4e...e5f6", country: "🇸🇪", city: "Стокгольм", latency: 41, relay: false, active: true },
+  { id: "0xab7c...2d3e", country: "🇨🇭", city: "Цюрих", latency: 29, relay: false, active: false },
+  { id: "0xf4g5...h6i7", country: "🇵🇱", city: "Варшава", latency: 67, relay: true, active: true },
+];
+
+const NETWORK_LOG = [
+  { time: "14:32:07", type: "connect", text: "Новый пир: 0x5c6d...a7e8 (Хельсинки)" },
+  { time: "14:31:55", type: "msg", text: "Сообщение маршрутизировано через 3 узла" },
+  { time: "14:31:12", type: "key", text: "Ключи обменяны с 0x1a2b...f3d4" },
+  { time: "14:30:44", type: "disconnect", text: "Узел 0xab7c...2d3e недоступен" },
+  { time: "14:29:30", type: "msg", text: "DHT-запрос выполнен успешно" },
+  { time: "14:28:15", type: "connect", text: "Подключён к onion-маршруту" },
 ];
 
 const CHATS = [
@@ -73,6 +95,16 @@ export default function Index() {
   const [callActive, setCallActive] = useState(false);
   const [callType, setCallType] = useState<"voice" | "video">("voice");
   const [showStory, setShowStory] = useState<number | null>(null);
+  const [peerCount, setPeerCount] = useState(5);
+  const [netTraffic, setNetTraffic] = useState({ up: 1.2, down: 3.4 });
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setPeerCount(p => Math.max(3, Math.min(12, p + (Math.random() > 0.5 ? 1 : -1))));
+      setNetTraffic({ up: +(Math.random() * 3).toFixed(1), down: +(Math.random() * 6).toFixed(1) });
+    }, 3000);
+    return () => clearInterval(t);
+  }, []);
 
   const activeContact = CHATS.find(c => c.id === activeChat);
 
@@ -89,8 +121,9 @@ export default function Index() {
     <div className="h-screen flex overflow-hidden bg-background">
       {/* Sidebar nav */}
       <div className="w-16 flex flex-col items-center py-4 gap-1 border-r border-border glass z-10 relative">
-        <div className="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center mb-4 shadow-lg shadow-purple-500/30">
+        <div className="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center mb-4 shadow-lg shadow-purple-500/30 relative">
           <span className="text-white font-bold text-sm font-mono">N</span>
+          <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-background animate-pulse" />
         </div>
         {TABS.map(tab => (
           <button
@@ -110,11 +143,26 @@ export default function Index() {
             {tab.id === "chats" && (
               <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-purple-400 rounded-full border border-background" />
             )}
+            {tab.id === "network" && (
+              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-green-400 rounded-full border border-background animate-pulse" />
+            )}
             <span className="absolute left-14 bg-card border border-border text-foreground text-xs px-2 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
               {tab.label}
             </span>
           </button>
         ))}
+        {/* P2P status bottom */}
+        <div className="mt-auto flex flex-col items-center gap-1">
+          <div className="w-11 h-px bg-border" />
+          <div className="flex flex-col items-center gap-0.5 py-2" title={`${peerCount} пиров подключено`}>
+            <div className="flex gap-0.5">
+              {[...Array(Math.min(peerCount, 5))].map((_, i) => (
+                <div key={i} className="w-1 h-3 rounded-full bg-green-400 opacity-80" style={{ height: `${8 + i * 3}px` }} />
+              ))}
+            </div>
+            <span className="text-[9px] text-green-400 font-mono">{peerCount}P</span>
+          </div>
+        </div>
       </div>
 
       {/* Main content */}
@@ -219,7 +267,12 @@ export default function Index() {
                   </div>
                   <div className="flex-1">
                     <p className="font-semibold text-sm">{activeContact.name}</p>
-                    <p className="text-xs text-green-400">{activeContact.online ? "В сети" : "Не в сети"}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-xs text-green-400">{activeContact.online ? "P2P · В сети" : "Не в сети"}</p>
+                      {activeContact.online && (
+                        <span className="text-[10px] text-muted-foreground font-mono bg-secondary px-1.5 py-0.5 rounded-md">3 хопа</span>
+                      )}
+                    </div>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => { setCallType("voice"); setCallActive(true); }}
@@ -240,9 +293,12 @@ export default function Index() {
                 </div>
 
                 {/* Encryption banner */}
-                <div className="mx-4 mt-3 mb-1 flex items-center justify-center gap-2 py-1.5 px-3 bg-green-500/5 border border-green-500/20 rounded-xl">
-                  <Icon name="Lock" size={12} className="text-green-400" />
-                  <span className="text-xs text-green-400 font-medium">Сквозное шифрование включено</span>
+                <div className="mx-4 mt-3 mb-1 flex items-center justify-between py-1.5 px-3 bg-green-500/5 border border-green-500/20 rounded-xl">
+                  <div className="flex items-center gap-2">
+                    <Icon name="Lock" size={12} className="text-green-400" />
+                    <span className="text-xs text-green-400 font-medium">E2E · P2P · без сервера</span>
+                  </div>
+                  <span className="text-[10px] text-muted-foreground font-mono">{MY_PUBKEY}</span>
                 </div>
 
                 {/* Messages */}
@@ -426,6 +482,109 @@ export default function Index() {
           </div>
         )}
 
+        {/* ===== NETWORK ===== */}
+        {activeTab === "network" && (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="p-4 border-b border-border flex-shrink-0">
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-bold gradient-text">P2P Сеть</h1>
+                <div className="flex items-center gap-2 px-2 py-1 bg-green-500/10 border border-green-500/20 rounded-lg">
+                  <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
+                  <span className="text-xs text-green-400 font-medium">Подключено</span>
+                </div>
+              </div>
+              {/* Node info */}
+              <div className="mt-3 p-3 bg-card rounded-xl border border-border">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-xs text-muted-foreground uppercase tracking-wider">Ваш узел</span>
+                  <span className="text-xs text-purple-400 font-mono">{MY_NODE_ID}</span>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  <div className="bg-secondary rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-green-400">{peerCount}</p>
+                    <p className="text-[10px] text-muted-foreground">Пиров</p>
+                  </div>
+                  <div className="bg-secondary rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-blue-400">↑{netTraffic.up}</p>
+                    <p className="text-[10px] text-muted-foreground">МБ/с отд.</p>
+                  </div>
+                  <div className="bg-secondary rounded-lg p-2 text-center">
+                    <p className="text-lg font-bold text-purple-400">↓{netTraffic.down}</p>
+                    <p className="text-[10px] text-muted-foreground">МБ/с пол.</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+              {/* Peer nodes */}
+              <div>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Узлы сети</h3>
+                <div className="space-y-2">
+                  {P2P_NODES.map((node, i) => (
+                    <div key={node.id} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border animate-fade-in"
+                      style={{ animationDelay: `${i * 0.04}s` }}>
+                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${node.active ? "bg-green-400" : "bg-muted-foreground"}`} />
+                      <span className="text-lg">{node.country}</span>
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{node.city}</p>
+                        <p className="text-[10px] text-muted-foreground font-mono">{node.id}</p>
+                      </div>
+                      {node.relay && (
+                        <span className="text-[10px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-md">relay</span>
+                      )}
+                      <div className="text-right">
+                        <p className={`text-xs font-mono font-bold ${node.latency < 30 ? "text-green-400" : node.latency < 60 ? "text-yellow-400" : "text-red-400"}`}>
+                          {node.active ? `${node.latency}мс` : "—"}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Protocol info */}
+              <div>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Протоколы</h3>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { name: "Signal Protocol", desc: "Шифрование сообщений", active: true, color: "#10b981" },
+                    { name: "DHT Kademlia", desc: "Поиск узлов", active: true, color: "#3b82f6" },
+                    { name: "Onion Routing", desc: "Анонимность трафика", active: true, color: "#a855f7" },
+                    { name: "IPFS", desc: "Хранение файлов", active: true, color: "#ec4899" },
+                    { name: "WebRTC", desc: "P2P звонки", active: true, color: "#f59e0b" },
+                    { name: "Tor Bridge", desc: "Обход блокировок", active: false, color: "#6b7280" },
+                  ].map(proto => (
+                    <div key={proto.name} className="p-2.5 bg-card rounded-xl border border-border flex items-start gap-2">
+                      <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ background: proto.active ? proto.color : "#374151" }} />
+                      <div>
+                        <p className="text-xs font-semibold">{proto.name}</p>
+                        <p className="text-[10px] text-muted-foreground">{proto.desc}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Network log */}
+              <div>
+                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Лог сети</h3>
+                <div className="bg-card rounded-xl border border-border overflow-hidden">
+                  {NETWORK_LOG.map((entry, i) => (
+                    <div key={i} className={`flex items-start gap-3 px-3 py-2 text-xs ${i < NETWORK_LOG.length - 1 ? "border-b border-border" : ""}`}>
+                      <span className="text-muted-foreground font-mono flex-shrink-0">{entry.time}</span>
+                      <span className={`flex-shrink-0 ${entry.type === "connect" ? "text-green-400" : entry.type === "disconnect" ? "text-red-400" : entry.type === "key" ? "text-yellow-400" : "text-purple-400"}`}>
+                        {entry.type === "connect" ? "+" : entry.type === "disconnect" ? "−" : entry.type === "key" ? "🔑" : "→"}
+                      </span>
+                      <span className="text-muted-foreground">{entry.text}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* ===== NOTIFICATIONS ===== */}
         {activeTab === "notifications" && (
           <div className="flex-1 flex flex-col overflow-hidden">
@@ -489,7 +648,25 @@ export default function Index() {
                 ))}
               </div>
 
-              <div className="mt-4 space-y-2">
+              {/* P2P Identity */}
+              <div className="mt-4 p-3 bg-green-500/5 border border-green-500/20 rounded-xl">
+                <p className="text-xs text-green-400 font-medium mb-2 flex items-center gap-1">
+                  <Icon name="ShieldCheck" size={12} />
+                  Децентрализованная идентичность
+                </p>
+                <div className="space-y-1.5">
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Node ID</p>
+                    <p className="text-xs font-mono text-foreground">{MY_NODE_ID}</p>
+                  </div>
+                  <div>
+                    <p className="text-[10px] text-muted-foreground">Публичный ключ</p>
+                    <p className="text-xs font-mono text-foreground">{MY_PUBKEY}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
                 {[
                   { icon: "Phone", label: "Телефон", value: "+7 999 000-00-00" },
                   { icon: "Mail", label: "Email", value: "user@nexchat.ru" },
@@ -544,7 +721,15 @@ export default function Index() {
                     { label: "Автоответы", desc: "Умные шаблоны", active: false },
                     { label: "NexBot", desc: "Встроенный помощник", active: true },
                   ]
-                }
+                },
+                {
+                  title: "Децентрализация", icon: "Network", color: "#10b981", items: [
+                    { label: "P2P режим", desc: "Сообщения без серверов", active: true },
+                    { label: "Onion-маршрутизация", desc: "Скрыть IP-адрес", active: true },
+                    { label: "Tor Bridge", desc: "Обход блокировок", active: false },
+                    { label: "Ретрансляция пиров", desc: "Помочь сети как relay", active: false },
+                  ]
+                },
               ].map(section => (
                 <div key={section.title}>
                   <div className="flex items-center gap-2 mb-2">
