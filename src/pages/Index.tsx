@@ -1,103 +1,173 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import Icon from "@/components/ui/icon";
+import { api, User, Chat, Message } from "@/lib/api";
 
 const TABS = [
   { id: "chats", label: "Чаты", icon: "MessageCircle" },
   { id: "contacts", label: "Контакты", icon: "Users" },
   { id: "groups", label: "Группы", icon: "UsersRound" },
   { id: "network", label: "P2P Сеть", icon: "Network" },
-  { id: "notifications", label: "Уведомления", icon: "Bell" },
   { id: "profile", label: "Профиль", icon: "UserCircle" },
   { id: "settings", label: "Настройки", icon: "Settings" },
 ];
 
-const MY_NODE_ID = "0x7f3a...c91e";
-const MY_PUBKEY = "ed25519:3xQ7...Kp9R";
-
-const P2P_NODES = [
-  { id: "0x1a2b...f3d4", country: "🇩🇪", city: "Франкфурт", latency: 18, relay: false, active: true },
-  { id: "0x5c6d...a7e8", country: "🇫🇮", city: "Хельсинки", latency: 34, relay: false, active: true },
-  { id: "0x9e0f...b1c2", country: "🇳🇱", city: "Амстердам", latency: 52, relay: true, active: true },
-  { id: "0x3d4e...e5f6", country: "🇸🇪", city: "Стокгольм", latency: 41, relay: false, active: true },
-  { id: "0xab7c...2d3e", country: "🇨🇭", city: "Цюрих", latency: 29, relay: false, active: false },
-  { id: "0xf4g5...h6i7", country: "🇵🇱", city: "Варшава", latency: 67, relay: true, active: true },
-];
-
-const NETWORK_LOG = [
-  { time: "14:32:07", type: "connect", text: "Новый пир: 0x5c6d...a7e8 (Хельсинки)" },
-  { time: "14:31:55", type: "msg", text: "Сообщение маршрутизировано через 3 узла" },
-  { time: "14:31:12", type: "key", text: "Ключи обменяны с 0x1a2b...f3d4" },
-  { time: "14:30:44", type: "disconnect", text: "Узел 0xab7c...2d3e недоступен" },
-  { time: "14:29:30", type: "msg", text: "DHT-запрос выполнен успешно" },
-  { time: "14:28:15", type: "connect", text: "Подключён к onion-маршруту" },
-];
-
-const CHATS = [
-  { id: 1, name: "Алексей Морозов", avatar: "АМ", color: "#a855f7", msg: "Увидимся завтра на встрече 👋", time: "14:32", unread: 3, online: true, typing: false },
-  { id: 2, name: "Команда Дизайн", avatar: "КД", color: "#ec4899", msg: "Макеты готовы к ревью!", time: "13:15", unread: 7, online: true, typing: true },
-  { id: 3, name: "Мария Петрова", avatar: "МП", color: "#3b82f6", msg: "Файл отправила тебе", time: "12:00", unread: 0, online: false, typing: false },
-  { id: 4, name: "NexBot 🤖", avatar: "NB", color: "#10b981", msg: "Привет! Чем могу помочь?", time: "11:44", unread: 1, online: true, typing: false },
-  { id: 5, name: "Иван Сидоров", avatar: "ИС", color: "#f59e0b", msg: "Посмотри документ, пожалуйста", time: "Вчера", unread: 0, online: false, typing: false },
-  { id: 6, name: "Анна Козлова", avatar: "АК", color: "#06b6d4", msg: "Спасибо за помощь! 🙌", time: "Вчера", unread: 0, online: true, typing: false },
-];
-
-const MESSAGES = [
-  { id: 1, out: false, text: "Привет! Как дела? 👋", time: "14:20" },
-  { id: 2, out: true, text: "Отлично, спасибо! Работаю над новым проектом", time: "14:21" },
-  { id: 3, out: false, text: "Это интересно! Расскажи подробнее", time: "14:22" },
-  { id: 4, out: true, text: "Это мессенджер с шифрованием и крутым дизайном 🚀", time: "14:25" },
-  { id: 5, out: false, text: "Звучит здорово! Когда запуск?", time: "14:28" },
-  { id: 6, out: true, text: "Скоро! Сейчас финальные правки делаем", time: "14:30" },
-  { id: 7, out: false, text: "Увидимся завтра на встрече 👋", time: "14:32" },
-];
-
-const STORIES = [
-  { id: 1, name: "Моя", avatar: "ВЫ", color: "#a855f7", viewed: false, isMe: true },
-  { id: 2, name: "Алексей", avatar: "АМ", color: "#a855f7", viewed: false, isMe: false },
-  { id: 3, name: "Команда", avatar: "КД", color: "#ec4899", viewed: false, isMe: false },
-  { id: 4, name: "Мария", avatar: "МП", color: "#3b82f6", viewed: true, isMe: false },
-  { id: 5, name: "Анна", avatar: "АК", color: "#06b6d4", viewed: true, isMe: false },
-];
-
-const CONTACTS = [
-  { id: 1, name: "Алексей Морозов", status: "В сети", avatar: "АМ", color: "#a855f7", phone: "+7 999 123-45-67", online: true },
-  { id: 2, name: "Анна Козлова", status: "Была 1ч назад", avatar: "АК", color: "#06b6d4", phone: "+7 999 234-56-78", online: false },
-  { id: 3, name: "Иван Сидоров", status: "Не беспокоить", avatar: "ИС", color: "#f59e0b", phone: "+7 999 345-67-89", online: false },
-  { id: 4, name: "Мария Петрова", status: "В сети", avatar: "МП", color: "#3b82f6", phone: "+7 999 456-78-90", online: true },
-  { id: 5, name: "NexBot", status: "Всегда онлайн 🤖", avatar: "NB", color: "#10b981", phone: "Бот", online: true },
-];
-
-const GROUPS = [
-  { id: 1, name: "Команда Дизайн", members: 12, avatar: "КД", color: "#ec4899", desc: "Обсуждение макетов и дизайн-систем", lastMsg: "Макеты готовы!" },
-  { id: 2, name: "Разработка 🛠️", members: 8, avatar: "РЗ", color: "#3b82f6", desc: "Технические вопросы и код", lastMsg: "Деплой прошёл успешно" },
-  { id: 3, name: "Маркетинг", members: 25, avatar: "МК", color: "#f59e0b", desc: "Стратегии и кампании", lastMsg: "Запуск завтра в 10:00" },
-  { id: 4, name: "Общий чат 🎉", members: 47, avatar: "ОЧ", color: "#10b981", desc: "Новости компании и анонсы", lastMsg: "Всем хороших выходных!" },
-];
-
-const NOTIFS = [
-  { id: 1, icon: "MessageCircle", color: "#a855f7", title: "Новое сообщение", text: "Алексей: Увидимся завтра 👋", time: "5 мин назад", unread: true },
-  { id: 2, icon: "UsersRound", color: "#ec4899", title: "Команда Дизайн", text: "Макеты готовы к ревью!", time: "20 мин назад", unread: true },
-  { id: 3, icon: "Phone", color: "#10b981", title: "Пропущенный звонок", text: "Мария Петрова", time: "1 ч назад", unread: false },
-  { id: 4, icon: "Heart", color: "#ef4444", title: "Реакция на сообщение", text: "Анна поставила ❤️ вашему сообщению", time: "2 ч назад", unread: false },
-  { id: 5, icon: "Circle", color: "#3b82f6", title: "Новая история", text: "Иван добавил историю", time: "3 ч назад", unread: false },
-];
-
 const REACTIONS_LIST = ["❤️", "😂", "🔥", "👍", "😮", "😢"];
+const MY_NODE_ID = "0x" + Math.random().toString(16).slice(2, 10) + "..." + Math.random().toString(16).slice(2, 6);
 
+// ===== AUTH SCREEN =====
+function AuthScreen({ onAuth }: { onAuth: (user: User, token: string) => void }) {
+  const [mode, setMode] = useState<"login" | "register">("login");
+  const [username, setUsername] = useState("");
+  const [displayName, setDisplayName] = useState("");
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const submit = async () => {
+    setError("");
+    setLoading(true);
+    const res = mode === "login"
+      ? await api.auth.login(username, password)
+      : await api.auth.register(username, displayName, password);
+    setLoading(false);
+    if (!res.ok || !res.data.token || !res.data.user) {
+      setError(res.data.error || "Ошибка");
+      return;
+    }
+    localStorage.setItem("nx_token", res.data.token);
+    localStorage.setItem("nx_user", JSON.stringify(res.data.user));
+    onAuth(res.data.user, res.data.token);
+  };
+
+  return (
+    <div className="h-screen flex items-center justify-center bg-background">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+        <div className="absolute top-1/4 left-1/4 w-64 h-64 rounded-full opacity-20 blur-3xl"
+          style={{ background: "radial-gradient(circle, #a855f7, transparent)" }} />
+        <div className="absolute bottom-1/4 right-1/4 w-64 h-64 rounded-full opacity-20 blur-3xl"
+          style={{ background: "radial-gradient(circle, #ec4899, transparent)" }} />
+      </div>
+      <div className="w-full max-w-sm mx-4 animate-fade-in">
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 rounded-2xl gradient-btn flex items-center justify-center mx-auto mb-4 shadow-2xl shadow-purple-500/40">
+            <span className="text-white font-bold text-2xl font-mono">N</span>
+          </div>
+          <h1 className="text-3xl font-bold gradient-text">NexChat</h1>
+          <p className="text-sm text-muted-foreground mt-1">Децентрализованный мессенджер</p>
+        </div>
+
+        <div className="bg-card border border-border rounded-2xl p-6 shadow-2xl">
+          <div className="flex gap-1 p-1 bg-secondary rounded-xl mb-6">
+            {(["login", "register"] as const).map(m => (
+              <button key={m} onClick={() => { setMode(m); setError(""); }}
+                className={`flex-1 py-2 rounded-lg text-sm font-medium transition-all ${mode === m ? "gradient-btn text-white shadow-md" : "text-muted-foreground hover:text-foreground"}`}>
+                {m === "login" ? "Войти" : "Регистрация"}
+              </button>
+            ))}
+          </div>
+
+          <div className="space-y-3">
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Логин</label>
+              <input
+                value={username}
+                onChange={e => setUsername(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && submit()}
+                placeholder="username"
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+            {mode === "register" && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-1 block">Имя</label>
+                <input
+                  value={displayName}
+                  onChange={e => setDisplayName(e.target.value)}
+                  placeholder="Иван Иванов"
+                  className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 text-foreground placeholder:text-muted-foreground"
+                />
+              </div>
+            )}
+            <div>
+              <label className="text-xs text-muted-foreground mb-1 block">Пароль</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && submit()}
+                placeholder="••••••••"
+                className="w-full bg-secondary border border-border rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
+
+            {error && (
+              <div className="flex items-center gap-2 p-2.5 bg-red-500/10 border border-red-500/20 rounded-xl">
+                <Icon name="AlertCircle" size={14} className="text-red-400 flex-shrink-0" />
+                <p className="text-xs text-red-400">{error}</p>
+              </div>
+            )}
+
+            <button onClick={submit} disabled={loading}
+              className="w-full gradient-btn text-white py-2.5 rounded-xl font-medium text-sm mt-2 hover:opacity-90 transition-opacity disabled:opacity-50 shadow-lg shadow-purple-500/30">
+              {loading ? "Загрузка..." : mode === "login" ? "Войти" : "Создать аккаунт"}
+            </button>
+          </div>
+        </div>
+
+        <div className="flex items-center justify-center gap-2 mt-4">
+          <Icon name="Lock" size={11} className="text-green-400" />
+          <p className="text-xs text-muted-foreground">E2E шифрование · P2P · без сервера</p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ===== MAIN APP =====
 export default function Index() {
+  const [user, setUser] = useState<User | null>(null);
+  const [authChecked, setAuthChecked] = useState(false);
   const [activeTab, setActiveTab] = useState("chats");
-  const [activeChat, setActiveChat] = useState<number | null>(1);
-  const [message, setMessage] = useState("");
+
+  // Chats state
+  const [chats, setChats] = useState<Chat[]>([]);
+  const [activeChatId, setActiveChatId] = useState<number | null>(null);
+  const [messages, setMessages] = useState<Message[]>([]);
+  const [msgInput, setMsgInput] = useState("");
+  const [sending, setSending] = useState(false);
+  const [loadingChats, setLoadingChats] = useState(false);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
   const [showReactions, setShowReactions] = useState<number | null>(null);
-  const [msgReactions, setMsgReactions] = useState<Record<number, string[]>>({
-    1: ["❤️", "😊"], 4: ["🔥", "👍"]
-  });
+
+  // Contacts state
+  const [contacts, setContacts] = useState<User[]>([]);
+  const [contactSearch, setContactSearch] = useState("");
+  const [loadingContacts, setLoadingContacts] = useState(false);
+
+  // Call state
   const [callActive, setCallActive] = useState(false);
   const [callType, setCallType] = useState<"voice" | "video">("voice");
-  const [showStory, setShowStory] = useState<number | null>(null);
+
+  // Network
   const [peerCount, setPeerCount] = useState(5);
   const [netTraffic, setNetTraffic] = useState({ up: 1.2, down: 3.4 });
 
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const activeChat = chats.find(c => c.id === activeChatId);
+
+  // Check auth on load
+  useEffect(() => {
+    const savedUser = localStorage.getItem("nx_user");
+    const savedToken = localStorage.getItem("nx_token");
+    if (savedUser && savedToken) {
+      setUser(JSON.parse(savedUser));
+    }
+    setAuthChecked(true);
+  }, []);
+
+  // Network ping animation
   useEffect(() => {
     const t = setInterval(() => {
       setPeerCount(p => Math.max(3, Math.min(12, p + (Math.random() > 0.5 ? 1 : -1))));
@@ -106,58 +176,120 @@ export default function Index() {
     return () => clearInterval(t);
   }, []);
 
-  const activeContact = CHATS.find(c => c.id === activeChat);
+  // Load chats when user is set
+  const loadChats = useCallback(async () => {
+    if (!user) return;
+    setLoadingChats(true);
+    const list = await api.chats.list();
+    setChats(list);
+    setLoadingChats(false);
+  }, [user]);
 
-  const addReaction = (msgId: number, emoji: string) => {
-    setMsgReactions(prev => {
-      const cur = prev[msgId] || [];
-      if (cur.includes(emoji)) return { ...prev, [msgId]: cur.filter(e => e !== emoji) };
-      return { ...prev, [msgId]: [...cur, emoji] };
-    });
+  useEffect(() => {
+    if (user) loadChats();
+  }, [user, loadChats]);
+
+  // Load messages for active chat + polling
+  const loadMessages = useCallback(async (chatId: number) => {
+    setLoadingMsgs(true);
+    const msgs = await api.chats.messages(chatId);
+    setMessages(msgs);
+    setLoadingMsgs(false);
+  }, []);
+
+  useEffect(() => {
+    if (pollRef.current) clearInterval(pollRef.current);
+    if (!activeChatId) return;
+    loadMessages(activeChatId);
+    pollRef.current = setInterval(() => loadMessages(activeChatId), 3000);
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+  }, [activeChatId, loadMessages]);
+
+  // Scroll to bottom on new messages
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  // Load contacts
+  useEffect(() => {
+    if (activeTab === "contacts" || activeTab === "chats") {
+      setLoadingContacts(true);
+      api.chats.getUsers(contactSearch).then(users => {
+        setContacts(users.filter(u => u.id !== user?.id));
+        setLoadingContacts(false);
+      });
+    }
+  }, [activeTab, contactSearch, user]);
+
+  const sendMessage = async () => {
+    if (!msgInput.trim() || !activeChatId || sending) return;
+    const text = msgInput.trim();
+    setMsgInput("");
+    setSending(true);
+    await api.chats.send(activeChatId, text);
+    await loadMessages(activeChatId);
+    await loadChats();
+    setSending(false);
+  };
+
+  const openChat = async (otherUserId: number) => {
+    const chatId = await api.chats.create(otherUserId);
+    await loadChats();
+    setActiveChatId(chatId);
+    setActiveTab("chats");
+  };
+
+  const addReaction = async (msgId: number, emoji: string) => {
+    await api.chats.react(msgId, emoji);
+    if (activeChatId) await loadMessages(activeChatId);
     setShowReactions(null);
   };
 
+  const formatTime = (ts: string) => {
+    const d = new Date(ts);
+    return d.toLocaleTimeString("ru", { hour: "2-digit", minute: "2-digit" });
+  };
+
+  const formatDate = (ts: string | null) => {
+    if (!ts) return "";
+    const d = new Date(ts);
+    const now = new Date();
+    if (d.toDateString() === now.toDateString()) return formatTime(ts);
+    return d.toLocaleDateString("ru", { day: "numeric", month: "short" });
+  };
+
+  if (!authChecked) return null;
+  if (!user) return <AuthScreen onAuth={(u, t) => { localStorage.setItem("nx_token", t); setUser(u); }} />;
+
+  const getChatName = (chat: Chat) => chat.is_group ? (chat.name || "Группа") : (chat.other_user?.display_name || "Чат");
+  const getChatInitials = (chat: Chat) => chat.is_group ? (chat.name?.slice(0, 2).toUpperCase() || "ГР") : (chat.other_user?.avatar_initials || "??");
+  const getChatColor = (chat: Chat) => chat.is_group ? chat.avatar_color : (chat.other_user?.avatar_color || "#a855f7");
+
   return (
     <div className="h-screen flex overflow-hidden bg-background">
-      {/* Sidebar nav */}
+      {/* Sidebar */}
       <div className="w-16 flex flex-col items-center py-4 gap-1 border-r border-border glass z-10 relative">
         <div className="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center mb-4 shadow-lg shadow-purple-500/30 relative">
           <span className="text-white font-bold text-sm font-mono">N</span>
           <span className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-background animate-pulse" />
         </div>
         {TABS.map(tab => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            title={tab.label}
+          <button key={tab.id} onClick={() => setActiveTab(tab.id)} title={tab.label}
             className={`w-11 h-11 rounded-xl flex items-center justify-center relative transition-all duration-200 group
-              ${activeTab === tab.id
-                ? "bg-purple-500/20 text-purple-400"
-                : "text-muted-foreground hover:text-foreground hover:bg-secondary"
-              }`}
-          >
+              ${activeTab === tab.id ? "bg-purple-500/20 text-purple-400" : "text-muted-foreground hover:text-foreground hover:bg-secondary"}`}>
             <Icon name={tab.icon} size={20} />
-            {tab.id === "notifications" && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-pink-500 rounded-full border border-background" />
-            )}
-            {tab.id === "chats" && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-purple-400 rounded-full border border-background" />
-            )}
-            {tab.id === "network" && (
-              <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-green-400 rounded-full border border-background animate-pulse" />
-            )}
+            {tab.id === "network" && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-green-400 rounded-full border border-background animate-pulse" />}
             <span className="absolute left-14 bg-card border border-border text-foreground text-xs px-2 py-1 rounded-md whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-50 shadow-lg">
               {tab.label}
             </span>
           </button>
         ))}
-        {/* P2P status bottom */}
         <div className="mt-auto flex flex-col items-center gap-1">
           <div className="w-11 h-px bg-border" />
-          <div className="flex flex-col items-center gap-0.5 py-2" title={`${peerCount} пиров подключено`}>
-            <div className="flex gap-0.5">
+          <div className="flex flex-col items-center gap-0.5 py-2" title={`${peerCount} пиров`}>
+            <div className="flex gap-0.5 items-end">
               {[...Array(Math.min(peerCount, 5))].map((_, i) => (
-                <div key={i} className="w-1 h-3 rounded-full bg-green-400 opacity-80" style={{ height: `${8 + i * 3}px` }} />
+                <div key={i} className="w-1 rounded-full bg-green-400" style={{ height: `${8 + i * 3}px` }} />
               ))}
             </div>
             <span className="text-[9px] text-green-400 font-mono">{peerCount}P</span>
@@ -165,114 +297,77 @@ export default function Index() {
         </div>
       </div>
 
-      {/* Main content */}
       <div className="flex flex-1 min-w-0">
 
         {/* ===== CHATS ===== */}
         {activeTab === "chats" && (
           <>
-            {/* Chat list */}
             <div className="w-72 flex flex-col border-r border-border flex-shrink-0">
               <div className="p-4 border-b border-border">
                 <div className="flex items-center justify-between mb-3">
                   <h1 className="text-lg font-bold gradient-text">Чаты</h1>
-                  <button className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-purple-400 transition-colors">
-                    <Icon name="SquarePen" size={16} />
+                  <button onClick={loadChats} className="w-8 h-8 rounded-lg bg-secondary flex items-center justify-center text-muted-foreground hover:text-purple-400 transition-colors">
+                    <Icon name="RefreshCw" size={15} />
                   </button>
                 </div>
-                <div className="relative">
-                  <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                  <input className="w-full bg-secondary rounded-xl pl-9 pr-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-purple-500/50" placeholder="Поиск..." />
-                </div>
               </div>
 
-              {/* Stories */}
-              <div className="px-3 py-2 border-b border-border overflow-hidden">
-                <div className="flex gap-2 overflow-x-auto pb-1">
-                  {STORIES.map(story => (
-                    <button key={story.id} onClick={() => setShowStory(story.id)} className="flex flex-col items-center gap-1 min-w-[52px]">
-                      <div className={`${!story.viewed && !story.isMe ? "story-ring" : ""} rounded-full`}>
-                        <div
-                          className="w-11 h-11 rounded-full flex items-center justify-center text-white text-xs font-bold border-2 border-background"
-                          style={{ background: story.color }}
-                        >
-                          {story.isMe ? "+" : story.avatar}
-                        </div>
-                      </div>
-                      <span className="text-[10px] text-muted-foreground truncate w-full text-center">{story.name}</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-
-              {/* Chat list */}
               <div className="flex-1 overflow-y-auto">
-                {CHATS.map(chat => (
-                  <button
-                    key={chat.id}
-                    onClick={() => setActiveChat(chat.id)}
+                {loadingChats && (
+                  <div className="flex items-center justify-center py-8">
+                    <Icon name="Loader2" size={20} className="text-purple-400 animate-spin" />
+                  </div>
+                )}
+                {!loadingChats && chats.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+                    <Icon name="MessageCirclePlus" size={32} className="text-muted-foreground mb-3" />
+                    <p className="text-sm text-muted-foreground">Нет чатов</p>
+                    <p className="text-xs text-muted-foreground mt-1">Перейдите в «Контакты» чтобы начать диалог</p>
+                  </div>
+                )}
+                {chats.map(chat => (
+                  <button key={chat.id} onClick={() => setActiveChatId(chat.id)}
                     className={`w-full flex items-center gap-3 px-3 py-3 transition-colors text-left
-                      ${activeChat === chat.id ? "bg-purple-500/10" : "hover:bg-secondary/50"}`}
-                  >
+                      ${activeChatId === chat.id ? "bg-purple-500/10" : "hover:bg-secondary/50"}`}>
                     <div className="relative flex-shrink-0">
                       <div className="w-11 h-11 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                        style={{ background: chat.color }}>
-                        {chat.avatar}
+                        style={{ background: getChatColor(chat) }}>
+                        {getChatInitials(chat)}
                       </div>
-                      {chat.online && (
+                      {!chat.is_group && chat.other_user?.is_online && (
                         <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-background" />
                       )}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <span className="text-sm font-semibold truncate">{chat.name}</span>
-                        <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-1">{chat.time}</span>
+                        <span className="text-sm font-semibold truncate">{getChatName(chat)}</span>
+                        <span className="text-[11px] text-muted-foreground flex-shrink-0 ml-1">{formatDate(chat.last_time)}</span>
                       </div>
-                      {chat.typing ? (
-                        <div className="flex items-center gap-1 mt-0.5">
-                          <span className="text-xs text-purple-400">печатает</span>
-                          <div className="flex gap-0.5">
-                            <div className="w-1 h-1 bg-purple-400 rounded-full typing-dot" />
-                            <div className="w-1 h-1 bg-purple-400 rounded-full typing-dot" />
-                            <div className="w-1 h-1 bg-purple-400 rounded-full typing-dot" />
-                          </div>
-                        </div>
-                      ) : (
-                        <p className="text-xs text-muted-foreground truncate mt-0.5">{chat.msg}</p>
-                      )}
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{chat.last_msg || "Нет сообщений"}</p>
                     </div>
-                    {chat.unread > 0 && (
-                      <span className="flex-shrink-0 min-w-[20px] h-5 rounded-full gradient-btn flex items-center justify-center text-white text-[10px] font-bold px-1">
-                        {chat.unread}
-                      </span>
-                    )}
                   </button>
                 ))}
               </div>
             </div>
 
             {/* Chat view */}
-            {activeContact ? (
+            {activeChat ? (
               <div className="flex-1 flex flex-col min-w-0">
-                {/* Header */}
                 <div className="flex items-center gap-3 px-4 py-3 border-b border-border glass">
                   <div className="relative">
                     <div className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold"
-                      style={{ background: activeContact.color }}>
-                      {activeContact.avatar}
+                      style={{ background: getChatColor(activeChat) }}>
+                      {getChatInitials(activeChat)}
                     </div>
-                    {activeContact.online && (
+                    {!activeChat.is_group && activeChat.other_user?.is_online && (
                       <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-400 rounded-full border-2 border-background" />
                     )}
                   </div>
                   <div className="flex-1">
-                    <p className="font-semibold text-sm">{activeContact.name}</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-green-400">{activeContact.online ? "P2P · В сети" : "Не в сети"}</p>
-                      {activeContact.online && (
-                        <span className="text-[10px] text-muted-foreground font-mono bg-secondary px-1.5 py-0.5 rounded-md">3 хопа</span>
-                      )}
-                    </div>
+                    <p className="font-semibold text-sm">{getChatName(activeChat)}</p>
+                    <p className="text-xs text-green-400">
+                      {!activeChat.is_group && activeChat.other_user?.is_online ? "P2P · В сети" : "Не в сети"}
+                    </p>
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => { setCallType("voice"); setCallActive(true); }}
@@ -283,97 +378,97 @@ export default function Index() {
                       className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-blue-400 hover:bg-blue-400/10 transition-colors">
                       <Icon name="Video" size={18} />
                     </button>
-                    <button className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                      <Icon name="Search" size={18} />
-                    </button>
-                    <button className="w-9 h-9 rounded-xl flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-secondary transition-colors">
-                      <Icon name="MoreVertical" size={18} />
-                    </button>
                   </div>
                 </div>
 
-                {/* Encryption banner */}
-                <div className="mx-4 mt-3 mb-1 flex items-center justify-between py-1.5 px-3 bg-green-500/5 border border-green-500/20 rounded-xl">
+                <div className="mx-4 mt-2 mb-1 flex items-center justify-between py-1 px-3 bg-green-500/5 border border-green-500/20 rounded-xl">
                   <div className="flex items-center gap-2">
-                    <Icon name="Lock" size={12} className="text-green-400" />
-                    <span className="text-xs text-green-400 font-medium">E2E · P2P · без сервера</span>
+                    <Icon name="Lock" size={11} className="text-green-400" />
+                    <span className="text-xs text-green-400">E2E · P2P · без сервера</span>
                   </div>
-                  <span className="text-[10px] text-muted-foreground font-mono">{MY_PUBKEY}</span>
+                  <span className="text-[10px] text-muted-foreground font-mono">{user.pubkey || MY_NODE_ID}</span>
                 </div>
 
-                {/* Messages */}
                 <div className="flex-1 overflow-y-auto px-4 py-2 space-y-2">
-                  {MESSAGES.map(msg => (
-                    <div key={msg.id} className={`flex ${msg.out ? "justify-end" : "justify-start"} animate-fade-in group`}>
-                      <div className="relative max-w-[70%]">
-                        <div
-                          className={`px-4 py-2.5 cursor-pointer ${msg.out ? "msg-bubble-out text-white" : "msg-bubble-in text-foreground"}`}
-                          onDoubleClick={() => setShowReactions(msg.id)}
-                        >
-                          <p className="text-sm leading-relaxed">{msg.text}</p>
-                          <p className={`text-[10px] mt-1 ${msg.out ? "text-white/60" : "text-muted-foreground"} text-right`}>{msg.time}</p>
-                        </div>
-
-                        {/* Reactions display */}
-                        {(msgReactions[msg.id]?.length ?? 0) > 0 && (
-                          <div className={`flex gap-1 mt-1 flex-wrap ${msg.out ? "justify-end" : "justify-start"}`}>
-                            {msgReactions[msg.id].map((r, i) => (
-                              <button key={i} onClick={() => addReaction(msg.id, r)}
-                                className="text-sm bg-secondary rounded-full px-1.5 py-0.5 border border-border hover:border-purple-500/50 transition-colors">
-                                {r}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-
-                        {/* Add reaction button */}
-                        <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)}
-                          className="absolute -top-2 right-2 w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs text-muted-foreground hover:text-foreground">
-                          +
-                        </button>
-
-                        {/* Reaction picker */}
-                        {showReactions === msg.id && (
-                          <div className={`absolute bottom-full mb-2 ${msg.out ? "right-0" : "left-0"} flex gap-1 bg-card border border-border rounded-2xl p-2 shadow-xl z-10 animate-scale-in`}>
-                            {REACTIONS_LIST.map(emoji => (
-                              <button key={emoji} onClick={() => addReaction(msg.id, emoji)}
-                                className="text-xl hover:scale-125 transition-transform">
-                                {emoji}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                  {loadingMsgs && messages.length === 0 && (
+                    <div className="flex justify-center py-8">
+                      <Icon name="Loader2" size={20} className="text-purple-400 animate-spin" />
                     </div>
-                  ))}
+                  )}
+                  {messages.map(msg => {
+                    const isOut = msg.sender_id === user.id;
+                    return (
+                      <div key={msg.id} className={`flex ${isOut ? "justify-end" : "justify-start"} animate-fade-in group`}>
+                        <div className="relative max-w-[70%]">
+                          {!isOut && (
+                            <div className="flex items-center gap-1 mb-1">
+                              <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[10px] font-bold"
+                                style={{ background: msg.sender_color }}>
+                                {msg.sender_initials || msg.sender_name?.[0]}
+                              </div>
+                              <span className="text-xs text-muted-foreground">{msg.sender_name}</span>
+                            </div>
+                          )}
+                          <div className={`px-4 py-2.5 cursor-pointer ${isOut ? "msg-bubble-out text-white" : "msg-bubble-in text-foreground"}`}
+                            onDoubleClick={() => setShowReactions(msg.id)}>
+                            <p className="text-sm leading-relaxed break-words">{msg.text}</p>
+                            <p className={`text-[10px] mt-1 ${isOut ? "text-white/60" : "text-muted-foreground"} text-right`}>
+                              {formatTime(msg.created_at)}
+                            </p>
+                          </div>
+
+                          {msg.reactions && msg.reactions.length > 0 && (
+                            <div className={`flex gap-1 mt-1 flex-wrap ${isOut ? "justify-end" : "justify-start"}`}>
+                              {Object.entries(
+                                msg.reactions.reduce((acc: Record<string, number>, r) => {
+                                  acc[r.emoji] = (acc[r.emoji] || 0) + 1;
+                                  return acc;
+                                }, {})
+                              ).map(([emoji, count]) => (
+                                <button key={emoji} onClick={() => addReaction(msg.id, emoji)}
+                                  className="text-sm bg-secondary rounded-full px-1.5 py-0.5 border border-border hover:border-purple-500/50 transition-colors">
+                                  {emoji} {count > 1 && <span className="text-xs text-muted-foreground">{count}</span>}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+
+                          <button onClick={() => setShowReactions(showReactions === msg.id ? null : msg.id)}
+                            className="absolute -top-2 right-2 w-6 h-6 rounded-full bg-secondary border border-border flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity text-xs text-muted-foreground">
+                            +
+                          </button>
+                          {showReactions === msg.id && (
+                            <div className={`absolute bottom-full mb-2 ${isOut ? "right-0" : "left-0"} flex gap-1 bg-card border border-border rounded-2xl p-2 shadow-xl z-10 animate-scale-in`}>
+                              {REACTIONS_LIST.map(emoji => (
+                                <button key={emoji} onClick={() => addReaction(msg.id, emoji)}
+                                  className="text-xl hover:scale-125 transition-transform">{emoji}</button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={messagesEndRef} />
                 </div>
 
-                {/* Input */}
                 <div className="px-4 pb-4 pt-2 border-t border-border">
                   <div className="flex items-end gap-2 bg-secondary rounded-2xl px-3 py-2">
-                    <button className="text-muted-foreground hover:text-purple-400 transition-colors pb-1">
-                      <Icon name="Paperclip" size={20} />
-                    </button>
-                    <button className="text-muted-foreground hover:text-pink-400 transition-colors pb-1">
-                      <Icon name="Image" size={20} />
-                    </button>
                     <textarea
-                      value={message}
-                      onChange={e => setMessage(e.target.value)}
-                      placeholder="Сообщение..."
+                      value={msgInput}
+                      onChange={e => setMsgInput(e.target.value)}
+                      onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                      placeholder="Сообщение... (Enter — отправить)"
                       rows={1}
                       className="flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground outline-none resize-none py-1 max-h-32"
                     />
-                    <button className="text-muted-foreground hover:text-yellow-400 transition-colors pb-1">
-                      <Icon name="Smile" size={20} />
-                    </button>
-                    {message.trim() ? (
-                      <button onClick={() => setMessage("")}
-                        className="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white shadow-lg shadow-purple-500/30 hover:scale-105 transition-transform">
-                        <Icon name="Send" size={18} />
+                    {msgInput.trim() ? (
+                      <button onClick={sendMessage} disabled={sending}
+                        className="w-9 h-9 rounded-xl gradient-btn flex items-center justify-center text-white shadow-lg shadow-purple-500/30 hover:scale-105 transition-transform disabled:opacity-50">
+                        <Icon name={sending ? "Loader2" : "Send"} size={18} className={sending ? "animate-spin" : ""} />
                       </button>
                     ) : (
-                      <button className="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400 hover:bg-purple-500/30 transition-colors">
+                      <button className="w-9 h-9 rounded-xl bg-purple-500/20 flex items-center justify-center text-purple-400">
                         <Icon name="Mic" size={18} />
                       </button>
                     )}
@@ -381,8 +476,11 @@ export default function Index() {
                 </div>
               </div>
             ) : (
-              <div className="flex-1 flex items-center justify-center">
-                <p className="text-muted-foreground">Выберите чат</p>
+              <div className="flex-1 flex flex-col items-center justify-center gap-3">
+                <div className="w-16 h-16 rounded-2xl gradient-btn flex items-center justify-center opacity-20">
+                  <Icon name="MessageCircle" size={32} className="text-white" />
+                </div>
+                <p className="text-muted-foreground text-sm">Выберите чат или найдите собеседника в «Контактах»</p>
               </div>
             )}
           </>
@@ -391,46 +489,46 @@ export default function Index() {
         {/* ===== CONTACTS ===== */}
         {activeTab === "contacts" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
-              <h1 className="text-xl font-bold gradient-text">Контакты</h1>
-              <button className="flex items-center gap-2 gradient-btn text-white text-sm px-3 py-1.5 rounded-xl hover:opacity-90 transition-opacity">
-                <Icon name="UserPlus" size={15} />
-                Добавить
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4">
-              <div className="relative mb-4">
+            <div className="p-4 border-b border-border flex-shrink-0">
+              <h1 className="text-xl font-bold gradient-text mb-3">Контакты</h1>
+              <div className="relative">
                 <Icon name="Search" size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                <input className="w-full bg-secondary rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 text-foreground placeholder:text-muted-foreground" placeholder="Поиск контактов..." />
+                <input value={contactSearch} onChange={e => setContactSearch(e.target.value)}
+                  className="w-full bg-secondary rounded-xl pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-1 focus:ring-purple-500/50 text-foreground placeholder:text-muted-foreground"
+                  placeholder="Поиск пользователей..." />
               </div>
-              <div className="space-y-2">
-                {CONTACTS.map(c => (
-                  <div key={c.id} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border hover:border-purple-500/30 transition-all group animate-fade-in">
-                    <div className="relative">
-                      <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold"
-                        style={{ background: c.color }}>
-                        {c.avatar}
-                      </div>
-                      {c.online && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-card" />}
-                    </div>
-                    <div className="flex-1">
-                      <p className="font-semibold">{c.name}</p>
-                      <p className="text-xs text-muted-foreground">{c.status}</p>
-                      <p className="text-xs text-muted-foreground font-mono mt-0.5">{c.phone}</p>
-                    </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setActiveTab("chats"); setActiveChat(c.id <= 4 ? c.id : 4); }}
-                        className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 hover:bg-purple-500/30 transition-colors">
-                        <Icon name="MessageCircle" size={15} />
-                      </button>
-                      <button onClick={() => { setCallType("voice"); setCallActive(true); setActiveChat(c.id <= 4 ? c.id : 4); }}
-                        className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 hover:bg-green-500/30 transition-colors">
-                        <Icon name="Phone" size={15} />
-                      </button>
-                    </div>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {loadingContacts && (
+                <div className="flex justify-center py-8"><Icon name="Loader2" size={20} className="text-purple-400 animate-spin" /></div>
+              )}
+              {contacts.map(c => (
+                <div key={c.id} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border hover:border-purple-500/30 transition-all group animate-fade-in">
+                  <div className="relative">
+                    <div className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold"
+                      style={{ background: c.avatar_color }}>{c.avatar_initials || c.display_name[0]}</div>
+                    {c.is_online && <span className="absolute bottom-0 right-0 w-3 h-3 bg-green-400 rounded-full border-2 border-card" />}
                   </div>
-                ))}
-              </div>
+                  <div className="flex-1">
+                    <p className="font-semibold">{c.display_name}</p>
+                    <p className="text-xs text-muted-foreground">@{c.username}</p>
+                    <p className="text-xs mt-0.5">{c.is_online ? <span className="text-green-400">В сети</span> : <span className="text-muted-foreground">Не в сети</span>}</p>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => openChat(c.id)}
+                      className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center text-purple-400 hover:bg-purple-500/30 transition-colors">
+                      <Icon name="MessageCircle" size={15} />
+                    </button>
+                    <button onClick={() => { setCallType("voice"); setCallActive(true); }}
+                      className="w-8 h-8 rounded-lg bg-green-500/20 flex items-center justify-center text-green-400 hover:bg-green-500/30 transition-colors">
+                      <Icon name="Phone" size={15} />
+                    </button>
+                  </div>
+                </div>
+              ))}
+              {!loadingContacts && contacts.length === 0 && (
+                <div className="text-center py-12 text-muted-foreground text-sm">Пользователи не найдены</div>
+              )}
             </div>
           </div>
         )}
@@ -438,46 +536,14 @@ export default function Index() {
         {/* ===== GROUPS ===== */}
         {activeTab === "groups" && (
           <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
+            <div className="p-4 border-b border-border flex-shrink-0">
               <h1 className="text-xl font-bold gradient-text">Группы</h1>
-              <button className="flex items-center gap-2 gradient-btn text-white text-sm px-3 py-1.5 rounded-xl hover:opacity-90 transition-opacity">
-                <Icon name="Plus" size={15} />
-                Создать
-              </button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {GROUPS.map(g => (
-                <div key={g.id} className="p-4 bg-card rounded-2xl border border-border hover:border-purple-500/30 transition-all cursor-pointer group animate-fade-in">
-                  <div className="flex items-start gap-4">
-                    <div className="w-14 h-14 rounded-2xl flex items-center justify-center text-white font-bold text-lg flex-shrink-0 shadow-lg"
-                      style={{ background: g.color }}>
-                      {g.avatar}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center justify-between">
-                        <h3 className="font-bold">{g.name}</h3>
-                        <span className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Icon name="Users" size={11} />
-                          {g.members}
-                        </span>
-                      </div>
-                      <p className="text-sm text-muted-foreground mt-0.5">{g.desc}</p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="h-px flex-1 bg-border" />
-                        <p className="text-xs text-muted-foreground">{g.lastMsg}</p>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="flex gap-2 mt-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <button className="flex-1 text-xs py-1.5 rounded-lg bg-purple-500/20 text-purple-400 hover:bg-purple-500/30 transition-colors font-medium">
-                      Открыть чат
-                    </button>
-                    <button className="flex-1 text-xs py-1.5 rounded-lg bg-secondary text-muted-foreground hover:text-foreground transition-colors font-medium">
-                      Участники
-                    </button>
-                  </div>
-                </div>
-              ))}
+            <div className="flex-1 flex items-center justify-center">
+              <div className="text-center">
+                <Icon name="UsersRound" size={40} className="text-muted-foreground mx-auto mb-3 opacity-30" />
+                <p className="text-muted-foreground text-sm">Группы пока создаются через Контакты</p>
+              </div>
             </div>
           </div>
         )}
@@ -493,11 +559,10 @@ export default function Index() {
                   <span className="text-xs text-green-400 font-medium">Подключено</span>
                 </div>
               </div>
-              {/* Node info */}
               <div className="mt-3 p-3 bg-card rounded-xl border border-border">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs text-muted-foreground uppercase tracking-wider">Ваш узел</span>
-                  <span className="text-xs text-purple-400 font-mono">{MY_NODE_ID}</span>
+                  <span className="text-xs text-purple-400 font-mono">{user.node_id || MY_NODE_ID}</span>
                 </div>
                 <div className="grid grid-cols-3 gap-2">
                   <div className="bg-secondary rounded-lg p-2 text-center">
@@ -506,111 +571,33 @@ export default function Index() {
                   </div>
                   <div className="bg-secondary rounded-lg p-2 text-center">
                     <p className="text-lg font-bold text-blue-400">↑{netTraffic.up}</p>
-                    <p className="text-[10px] text-muted-foreground">МБ/с отд.</p>
+                    <p className="text-[10px] text-muted-foreground">МБ/с</p>
                   </div>
                   <div className="bg-secondary rounded-lg p-2 text-center">
                     <p className="text-lg font-bold text-purple-400">↓{netTraffic.down}</p>
-                    <p className="text-[10px] text-muted-foreground">МБ/с пол.</p>
+                    <p className="text-[10px] text-muted-foreground">МБ/с</p>
                   </div>
                 </div>
               </div>
             </div>
-
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
-              {/* Peer nodes */}
-              <div>
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Узлы сети</h3>
-                <div className="space-y-2">
-                  {P2P_NODES.map((node, i) => (
-                    <div key={node.id} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border animate-fade-in"
-                      style={{ animationDelay: `${i * 0.04}s` }}>
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 ${node.active ? "bg-green-400" : "bg-muted-foreground"}`} />
-                      <span className="text-lg">{node.country}</span>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{node.city}</p>
-                        <p className="text-[10px] text-muted-foreground font-mono">{node.id}</p>
-                      </div>
-                      {node.relay && (
-                        <span className="text-[10px] px-1.5 py-0.5 bg-yellow-500/20 text-yellow-400 rounded-md">relay</span>
-                      )}
-                      <div className="text-right">
-                        <p className={`text-xs font-mono font-bold ${node.latency < 30 ? "text-green-400" : node.latency < 60 ? "text-yellow-400" : "text-red-400"}`}>
-                          {node.active ? `${node.latency}мс` : "—"}
-                        </p>
-                      </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Протоколы</h3>
+              <div className="grid grid-cols-2 gap-2">
+                {[
+                  { name: "Signal Protocol", desc: "E2E шифрование", color: "#10b981", on: true },
+                  { name: "DHT Kademlia", desc: "Поиск узлов", color: "#3b82f6", on: true },
+                  { name: "Onion Routing", desc: "Анонимность", color: "#a855f7", on: true },
+                  { name: "WebRTC", desc: "P2P звонки", color: "#f59e0b", on: true },
+                ].map(p => (
+                  <div key={p.name} className="p-2.5 bg-card rounded-xl border border-border flex items-start gap-2">
+                    <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ background: p.color }} />
+                    <div>
+                      <p className="text-xs font-semibold">{p.name}</p>
+                      <p className="text-[10px] text-muted-foreground">{p.desc}</p>
                     </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Protocol info */}
-              <div>
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Протоколы</h3>
-                <div className="grid grid-cols-2 gap-2">
-                  {[
-                    { name: "Signal Protocol", desc: "Шифрование сообщений", active: true, color: "#10b981" },
-                    { name: "DHT Kademlia", desc: "Поиск узлов", active: true, color: "#3b82f6" },
-                    { name: "Onion Routing", desc: "Анонимность трафика", active: true, color: "#a855f7" },
-                    { name: "IPFS", desc: "Хранение файлов", active: true, color: "#ec4899" },
-                    { name: "WebRTC", desc: "P2P звонки", active: true, color: "#f59e0b" },
-                    { name: "Tor Bridge", desc: "Обход блокировок", active: false, color: "#6b7280" },
-                  ].map(proto => (
-                    <div key={proto.name} className="p-2.5 bg-card rounded-xl border border-border flex items-start gap-2">
-                      <div className="w-2 h-2 rounded-full mt-1 flex-shrink-0" style={{ background: proto.active ? proto.color : "#374151" }} />
-                      <div>
-                        <p className="text-xs font-semibold">{proto.name}</p>
-                        <p className="text-[10px] text-muted-foreground">{proto.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Network log */}
-              <div>
-                <h3 className="text-xs font-bold text-muted-foreground uppercase tracking-wider mb-2">Лог сети</h3>
-                <div className="bg-card rounded-xl border border-border overflow-hidden">
-                  {NETWORK_LOG.map((entry, i) => (
-                    <div key={i} className={`flex items-start gap-3 px-3 py-2 text-xs ${i < NETWORK_LOG.length - 1 ? "border-b border-border" : ""}`}>
-                      <span className="text-muted-foreground font-mono flex-shrink-0">{entry.time}</span>
-                      <span className={`flex-shrink-0 ${entry.type === "connect" ? "text-green-400" : entry.type === "disconnect" ? "text-red-400" : entry.type === "key" ? "text-yellow-400" : "text-purple-400"}`}>
-                        {entry.type === "connect" ? "+" : entry.type === "disconnect" ? "−" : entry.type === "key" ? "🔑" : "→"}
-                      </span>
-                      <span className="text-muted-foreground">{entry.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ===== NOTIFICATIONS ===== */}
-        {activeTab === "notifications" && (
-          <div className="flex-1 flex flex-col overflow-hidden">
-            <div className="p-4 border-b border-border flex items-center justify-between flex-shrink-0">
-              <h1 className="text-xl font-bold gradient-text">Уведомления</h1>
-              <button className="text-xs text-purple-400 hover:text-purple-300 transition-colors">
-                Прочитать все
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              {NOTIFS.map((n, i) => (
-                <div key={n.id}
-                  className="flex items-start gap-3 p-3 bg-card rounded-xl border border-border hover:border-purple-500/30 transition-all cursor-pointer animate-fade-in"
-                  style={{ animationDelay: `${i * 0.05}s` }}>
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                    style={{ background: `${n.color}20` }}>
-                    <Icon name={n.icon} size={18} style={{ color: n.color }} />
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold">{n.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">{n.text}</p>
-                    <p className="text-[10px] text-muted-foreground/60 mt-1">{n.time}</p>
-                  </div>
-                  {n.unread && <span className="w-2 h-2 bg-purple-400 rounded-full flex-shrink-0 mt-2" />}
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         )}
@@ -619,36 +606,23 @@ export default function Index() {
         {activeTab === "profile" && (
           <div className="flex-1 flex flex-col overflow-y-auto">
             <div className="relative h-40 overflow-hidden flex-shrink-0">
-              <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, #7c3aed 0%, #ec4899 50%, #3b82f6 100%)" }} />
-              <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse at 30% 50%, rgba(168,85,247,0.4) 0%, transparent 60%)" }} />
-              <button className="absolute top-3 right-3 w-8 h-8 rounded-lg glass flex items-center justify-center text-white/80 hover:text-white transition-colors">
-                <Icon name="Pencil" size={14} />
+              <div className="absolute inset-0" style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899, #3b82f6)" }} />
+              <button onClick={() => api.auth.logout().then(() => setUser(null))}
+                className="absolute top-3 right-3 flex items-center gap-1.5 px-3 py-1.5 rounded-lg glass text-white/80 hover:text-white text-xs transition-colors">
+                <Icon name="LogOut" size={13} />
+                Выйти
               </button>
             </div>
             <div className="px-6 pb-6 -mt-12 relative">
               <div className="story-ring w-24 h-24 rounded-full inline-block">
-                <div className="w-24 h-24 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center text-white text-2xl font-bold border-4 border-background">
-                  ВЫ
+                <div className="w-24 h-24 rounded-full flex items-center justify-center text-white text-2xl font-bold border-4 border-background"
+                  style={{ background: user.avatar_color }}>
+                  {user.avatar_initials || user.display_name[0]}
                 </div>
               </div>
-              <h2 className="text-2xl font-bold mt-2">Ваш Профиль</h2>
-              <p className="text-sm text-muted-foreground">@username</p>
-              <p className="text-sm mt-2 text-foreground/80">Строю будущее, один чат за раз 🚀</p>
+              <h2 className="text-2xl font-bold mt-2">{user.display_name}</h2>
+              <p className="text-sm text-muted-foreground">@{user.username}</p>
 
-              <div className="grid grid-cols-3 gap-3 mt-4">
-                {[
-                  { label: "Контакты", value: "142" },
-                  { label: "Группы", value: "12" },
-                  { label: "Истории", value: "28" },
-                ].map(stat => (
-                  <div key={stat.label} className="bg-card rounded-xl p-3 border border-border text-center">
-                    <p className="text-xl font-bold gradient-text">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">{stat.label}</p>
-                  </div>
-                ))}
-              </div>
-
-              {/* P2P Identity */}
               <div className="mt-4 p-3 bg-green-500/5 border border-green-500/20 rounded-xl">
                 <p className="text-xs text-green-400 font-medium mb-2 flex items-center gap-1">
                   <Icon name="ShieldCheck" size={12} />
@@ -657,31 +631,13 @@ export default function Index() {
                 <div className="space-y-1.5">
                   <div>
                     <p className="text-[10px] text-muted-foreground">Node ID</p>
-                    <p className="text-xs font-mono text-foreground">{MY_NODE_ID}</p>
+                    <p className="text-xs font-mono text-foreground break-all">{user.node_id || MY_NODE_ID}</p>
                   </div>
                   <div>
                     <p className="text-[10px] text-muted-foreground">Публичный ключ</p>
-                    <p className="text-xs font-mono text-foreground">{MY_PUBKEY}</p>
+                    <p className="text-xs font-mono text-foreground break-all">{user.pubkey || "—"}</p>
                   </div>
                 </div>
-              </div>
-
-              <div className="mt-3 space-y-2">
-                {[
-                  { icon: "Phone", label: "Телефон", value: "+7 999 000-00-00" },
-                  { icon: "Mail", label: "Email", value: "user@nexchat.ru" },
-                  { icon: "MapPin", label: "Город", value: "Москва, Россия" },
-                ].map(item => (
-                  <div key={item.label} className="flex items-center gap-3 p-3 bg-card rounded-xl border border-border">
-                    <div className="w-8 h-8 rounded-lg bg-purple-500/20 flex items-center justify-center">
-                      <Icon name={item.icon} size={15} className="text-purple-400" />
-                    </div>
-                    <div>
-                      <p className="text-xs text-muted-foreground">{item.label}</p>
-                      <p className="text-sm font-medium">{item.value}</p>
-                    </div>
-                  </div>
-                ))}
               </div>
             </div>
           </div>
@@ -698,28 +654,13 @@ export default function Index() {
                 {
                   title: "Безопасность", icon: "Shield", color: "#10b981", items: [
                     { label: "Сквозное шифрование", desc: "E2E для всех чатов", active: true },
-                    { label: "Двухфакторная аутентификация", desc: "SMS или приложение", active: true },
-                    { label: "Биометрический вход", desc: "Face ID / Touch ID", active: false },
+                    { label: "Двухфакторная аутентификация", desc: "SMS или приложение", active: false },
                   ]
                 },
                 {
                   title: "Уведомления", icon: "Bell", color: "#a855f7", items: [
                     { label: "Push-уведомления", desc: "Новые сообщения", active: true },
                     { label: "Звуки сообщений", desc: "Системный звук", active: true },
-                    { label: "Превью в уведомлениях", desc: "Показывать текст", active: false },
-                  ]
-                },
-                {
-                  title: "Конфиденциальность", icon: "Eye", color: "#ec4899", items: [
-                    { label: "Время последнего визита", desc: "Видят все", active: true },
-                    { label: "Статус набора текста", desc: "Показывать «печатает»", active: true },
-                    { label: "Статус прочтения", desc: "Галочки доставки", active: true },
-                  ]
-                },
-                {
-                  title: "Чат-боты", icon: "Bot", color: "#3b82f6", items: [
-                    { label: "Автоответы", desc: "Умные шаблоны", active: false },
-                    { label: "NexBot", desc: "Встроенный помощник", active: true },
                   ]
                 },
                 {
@@ -727,7 +668,6 @@ export default function Index() {
                     { label: "P2P режим", desc: "Сообщения без серверов", active: true },
                     { label: "Onion-маршрутизация", desc: "Скрыть IP-адрес", active: true },
                     { label: "Tor Bridge", desc: "Обход блокировок", active: false },
-                    { label: "Ретрансляция пиров", desc: "Помочь сети как relay", active: false },
                   ]
                 },
               ].map(section => (
@@ -753,30 +693,33 @@ export default function Index() {
                   </div>
                 </div>
               ))}
+
+              <div className="pt-4 border-t border-border">
+                <button onClick={() => api.auth.logout().then(() => setUser(null))}
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl border border-red-500/30 text-red-400 hover:bg-red-500/10 transition-colors text-sm">
+                  <Icon name="LogOut" size={15} />
+                  Выйти из аккаунта
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
 
-      {/* === Call overlay === */}
+      {/* Call overlay */}
       {callActive && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-xl z-50 flex flex-col items-center justify-center gap-6 animate-fade-in">
           <div className="story-ring rounded-full">
             <div className="w-24 h-24 rounded-full flex items-center justify-center text-white text-2xl font-bold"
-              style={{ background: activeContact?.color }}>
-              {activeContact?.avatar}
+              style={{ background: activeChat ? getChatColor(activeChat) : "#a855f7" }}>
+              {activeChat ? getChatInitials(activeChat) : "?"}
             </div>
           </div>
           <div className="text-center">
-            <h2 className="text-2xl font-bold text-white">{activeContact?.name}</h2>
-            <p className="text-white/60 mt-1 animate-pulse-slow">{callType === "voice" ? "🎙️ Голосовой звонок" : "📹 Видеозвонок"} · Соединение...</p>
+            <h2 className="text-2xl font-bold text-white">{activeChat ? getChatName(activeChat) : "Звонок"}</h2>
+            <p className="text-white/60 mt-1">{callType === "voice" ? "🎙️ Голосовой" : "📹 Видеозвонок"} · Соединение...</p>
           </div>
-          {callType === "video" && (
-            <div className="w-64 h-40 bg-secondary/50 rounded-2xl border border-border flex items-center justify-center">
-              <Icon name="Video" size={32} className="text-muted-foreground" />
-            </div>
-          )}
-          <div className="flex items-center gap-4 mt-4">
+          <div className="flex items-center gap-4">
             <button className="w-14 h-14 rounded-full bg-white/10 flex items-center justify-center text-white hover:bg-white/20 transition-colors">
               <Icon name="MicOff" size={22} />
             </button>
@@ -789,42 +732,6 @@ export default function Index() {
                 <Icon name="VideoOff" size={22} />
               </button>
             )}
-          </div>
-        </div>
-      )}
-
-      {/* === Story overlay === */}
-      {showStory !== null && (
-        <div className="fixed inset-0 bg-black/90 backdrop-blur-xl z-50 flex items-center justify-center animate-fade-in"
-          onClick={() => setShowStory(null)}>
-          <div className="relative w-80 h-[500px] rounded-3xl overflow-hidden border border-border shadow-2xl"
-            style={{ background: "linear-gradient(135deg, #7c3aed, #ec4899, #3b82f6)" }}
-            onClick={e => e.stopPropagation()}>
-            <div className="absolute top-3 left-3 right-3 flex gap-1">
-              {[...Array(4)].map((_, i) => (
-                <div key={i} className={`h-0.5 flex-1 rounded-full ${i === 0 ? "bg-white" : "bg-white/30"}`} />
-              ))}
-            </div>
-            <div className="absolute top-8 left-3 flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white text-xs font-bold">
-                {STORIES.find(s => s.id === showStory)?.avatar}
-              </div>
-              <span className="text-white text-sm font-medium">{STORIES.find(s => s.id === showStory)?.name}</span>
-              <span className="text-white/60 text-xs">только что</span>
-            </div>
-            <div className="absolute inset-0 flex items-center justify-center">
-              <p className="text-6xl">🚀</p>
-            </div>
-            <div className="absolute bottom-4 left-3 right-3">
-              <div className="flex items-center gap-2 bg-black/30 rounded-full px-4 py-2">
-                <input placeholder="Ответить..." className="flex-1 bg-transparent text-white text-sm placeholder:text-white/50 outline-none" />
-                <Icon name="Send" size={16} className="text-white/60" />
-              </div>
-            </div>
-            <button onClick={() => setShowStory(null)}
-              className="absolute top-8 right-3 w-8 h-8 rounded-full bg-black/30 flex items-center justify-center text-white">
-              <Icon name="X" size={16} />
-            </button>
           </div>
         </div>
       )}
